@@ -62,30 +62,25 @@ export default function ManagerPage() {
   }
 
   const statusLabels: any = {
-    pending: 'Pending',
-    confirmed: 'Confirmed',
-    truck_arrived: 'Truck Arrived',
-    in_progress: 'In Progress',
+    heading_to_tas: 'Heading to TAS',
     at_airport: 'At Airport',
     departed: 'Departed',
-    arrived_destination: 'Arrived',
+    arrived_destination: 'Arrived at Destination',
     completed: 'Completed',
     postponed: 'Postponed'
   }
 
   const statusColors: any = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    confirmed: 'bg-blue-100 text-blue-800',
-    truck_arrived: 'bg-purple-100 text-purple-800',
-    in_progress: 'bg-orange-100 text-orange-800',
+    heading_to_tas: 'bg-green-100 text-green-800',
     at_airport: 'bg-indigo-100 text-indigo-800',
     departed: 'bg-cyan-100 text-cyan-800',
-    arrived_destination: 'bg-green-100 text-green-800',
+    arrived_destination: 'bg-emerald-100 text-emerald-800',
     completed: 'bg-gray-100 text-gray-800',
     postponed: 'bg-red-100 text-red-800'
   }
 
-  const activeShipments = shipments.filter(s => s.status !== 'completed')
+  const opsStatuses = ['heading_to_tas', 'at_airport', 'departed', 'arrived_destination', 'completed', 'postponed']
+  const activeShipments = shipments.filter(s => opsStatuses.includes(s.status) && s.status !== 'completed')
   const completedShipments = shipments.filter(s => s.status === 'completed')
 
   const menuItems = [

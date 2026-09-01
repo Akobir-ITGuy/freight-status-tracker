@@ -7,6 +7,10 @@ export default function SalesPage() {
   const [shipments, setShipments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [darkMode, setDarkMode] = useState(false)
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [activeSection, setActiveSection] = useState('active')
   const [form, setForm] = useState({
     tracking_number: '',
     client_name: '',
@@ -22,12 +26,27 @@ export default function SalesPage() {
 
   useEffect(() => {
     fetchShipments()
+    fetchCurrentUser()
   }, [])
 
+  const fetchCurrentUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data } = await supabase
+        .from('users')
+        .select('full_name, role, team')
+        .eq('id', user.id)
+        .single()
+      setCurrentUser(data)
+    }
+  }
+
   const fetchShipments = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
     const { data } = await supabase
       .from('shipments')
       .select('*')
+      .eq('created_by', user?.id)
       .order('created_at', { ascending: false })
     setShipments(data || [])
     setLoading(false)
@@ -35,7 +54,6 @@ export default function SalesPage() {
 
   const handleSubmit = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    
     const { data: userData } = await supabase
       .from('users')
       .select('team')
@@ -46,7 +64,7 @@ export default function SalesPage() {
       ...form,
       weight_kg: parseFloat(form.weight_kg),
       volume_m3: parseFloat(form.volume_m3),
-      status: 'pending',
+      status: 'shipment_confirmed',
       created_by: user?.id,
       team: userData?.team
     })
@@ -69,191 +87,264 @@ export default function SalesPage() {
     }
   }
 
+  const updateStatus = async (shipmentId: string, status: string) => {
+    await supabase
+      .from('shipments')
+      .update({ status })
+      .eq('id', shipmentId)
+    fetchShipments()
+  }
+
   const statusLabels: any = {
-    pending: 'Pending',
-    confirmed: 'Confirmed',
-    truck_arrived: 'Truck arrived',
-    in_progress: 'In progress',
-    at_airport: 'At airport',
+    shipment_confirmed: 'Shipment Confirmed',
+    arrived_at_wh: 'Arrived at W/H',
+    departed_from_wh: 'Departed from W/H',
+    under_customs: 'Under Customs Formalities',
+    arrived_cn_kz: 'Arrived at CN/KZ Border',
+    arrived_kz_uz: 'Arrived at KZ/UZ Border',
+    heading_to_tas: 'Heading to TAS',
+    at_airport: 'At Airport',
     departed: 'Departed',
-    arrived_destination: 'Arrived at destination',
+    arrived_destination: 'Arrived at Destination',
     completed: 'Completed',
     postponed: 'Postponed'
   }
 
   const statusColors: any = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    confirmed: 'bg-blue-100 text-blue-800',
-    truck_arrived: 'bg-purple-100 text-purple-800',
-    in_progress: 'bg-orange-100 text-orange-800',
-    at_airport: 'bg-indigo-100 text-indigo-800',
-    departed: 'bg-cyan-100 text-cyan-800',
-    arrived_destination: 'bg-green-100 text-green-800',
+    shipment_confirmed: 'bg-blue-100 text-blue-800',
+    arrived_at_wh: 'bg-yellow-100 text-yellow-800',
+    departed_from_wh: 'bg-orange-100 text-orange-800',
+    under_customs: 'bg-purple-100 text-purple-800',
+    arrived_cn_kz: 'bg-indigo-100 text-indigo-800',
+    arrived_kz_uz: 'bg-cyan-100 text-cyan-800',
+    heading_to_tas: 'bg-green-100 text-green-800',
+    at_airport: 'bg-green-200 text-green-900',
+    departed: 'bg-teal-100 text-teal-800',
+    arrived_destination: 'bg-emerald-100 text-emerald-800',
     completed: 'bg-gray-100 text-gray-800',
     postponed: 'bg-red-100 text-red-800'
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      
-      {/* Шапка */}
-      <div className="bg-white border-b px-8 py-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">OPS Logistics — Sales</h1>
-        <button
-          onClick={() => setShowForm(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2 rounded-lg transition-colors"
-        >
-          + New AWB
-        </button>
-      </div>
+  const salesStatuses = [
+    'shipment_confirmed',
+    'arrived_at_wh',
+    'departed_from_wh',
+    'under_customs',
+    'arrived_cn_kz',
+    'arrived_kz_uz',
+    'heading_to_tas'
+  ]
 
-      {/* Список накладных */}
-      <div className="p-8">
-        {loading ? (
-          <p className="text-gray-500">Loading...</p>
-        ) : shipments.length === 0 ? (
-          <div className="text-center py-20">
-            <p className="text-gray-400 text-lg">No AWBs yet</p>
-            <p className="text-gray-400">Click "+ New AWB" to create the first one</p>
-          </div>
-        ) : (
-          <div className="grid gap-4">
-            {shipments.map((s) => (
-              <div key={s.id} className="bg-white rounded-xl shadow-sm p-6 flex justify-between items-center">
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <span className="font-bold text-gray-900">{s.tracking_number}</span>
+  const activeShipments = shipments.filter(s => s.status !== 'completed')
+  const completedShipments = shipments.filter(s => s.status === 'completed')
+
+  const menuItems = [
+    { id: 'active', label: 'Active Shipments', icon: '📦' },
+    { id: 'completed', label: 'Completed Shipments', icon: '✅' },
+    { id: 'guide', label: 'User Guide', icon: '📖' },
+    { id: 'feedback', label: 'Feedback', icon: '💬' },
+  ]
+
+  const renderTable = (data: any[]) => (
+    <div className={`rounded-xl shadow-sm overflow-hidden ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
+      <table className="w-full">
+        <thead className={`border-b ${darkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
+          <tr>
+            {['Tracking No.', 'Client', 'Route', 'Weight', 'Departure', 'Status'].map(h => (
+              <th key={h} className={`text-left px-6 py-3 text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className={`divide-y ${darkMode ? 'divide-gray-600' : 'divide-gray-100'}`}>
+          {loading ? (
+            <tr><td colSpan={6} className="text-center py-10 text-gray-400">Loading...</td></tr>
+          ) : data.length === 0 ? (
+            <tr><td colSpan={6} className="text-center py-10 text-gray-400">No AWBs yet</td></tr>
+          ) : (
+            data.map((s) => (
+              <tr key={s.id} className={darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-50'}>
+                <td className={`px-6 py-4 font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.tracking_number}</td>
+                <td className={`px-6 py-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{s.client_name}</td>
+                <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.origin} → {s.destination}</td>
+                <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.weight_kg} kg</td>
+                <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.estimated_departure}</td>
+                <td className="px-6 py-4">
+                  {activeSection === 'active' ? (
+                    <select
+                      value={s.status}
+                      onChange={(e) => updateStatus(s.id, e.target.value)}
+                      className={`text-sm border rounded-lg px-2 py-1 ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-700'}`}
+                    >
+                      {salesStatuses.map(status => (
+                        <option key={status} value={status}>{statusLabels[status]}</option>
+                      ))}
+                    </select>
+                  ) : (
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[s.status]}`}>
                       {statusLabels[s.status]}
                     </span>
-                  </div>
-                  <p className="text-gray-600">{s.client_name}</p>
-                  <p className="text-gray-400 text-sm">{s.origin} → {s.destination}</p>
-                </div>
-                <div className="text-right text-sm text-gray-500">
-                  <p>{s.weight_kg} kg</p>
-                  <p>{s.volume_m3} m³</p>
-                  <p className="mt-1">{s.estimated_departure}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+                  )}
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+
+  return (
+    <div className={`min-h-screen ${darkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
+
+      {/* Header */}
+      <div className={`border-b px-8 py-4 flex items-center justify-between ${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white'}`}>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className={`flex flex-col gap-1 p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+          >
+            <span className={`w-5 h-0.5 block ${darkMode ? 'bg-gray-300' : 'bg-gray-700'}`}></span>
+            <span className={`w-5 h-0.5 block ${darkMode ? 'bg-gray-300' : 'bg-gray-700'}`}></span>
+            <span className={`w-5 h-0.5 block ${darkMode ? 'bg-gray-300' : 'bg-gray-700'}`}></span>
+          </button>
+          <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+            Freight Status Tracker
+          </h1>
+        </div>
+        <div className="flex items-center gap-4">
+          {currentUser && (
+            <span className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+              👤 {currentUser.full_name}
+            </span>
+          )}
+          <button
+            onClick={() => setShowForm(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2 rounded-lg transition-colors"
+          >
+            + New AWB
+          </button>
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${darkMode ? 'bg-gray-700 text-yellow-400 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >
+            {darkMode ? '☀️ Light' : '🌙 Dark'}
+          </button>
+        </div>
       </div>
 
-      {/* Форма создания накладной */}
+      <div className="flex">
+        {/* Sidebar */}
+        {menuOpen && (
+          <div className={`w-64 min-h-screen border-r shadow-sm ${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white'}`}>
+            <nav className="p-4 flex flex-col gap-1">
+              {menuItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => { setActiveSection(item.id); setMenuOpen(false) }}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                    activeSection === item.id
+                      ? 'bg-blue-50 text-blue-700 font-medium'
+                      : darkMode ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </nav>
+          </div>
+        )}
+
+        {/* Main Content */}
+        <div className="flex-1 p-8">
+          {activeSection === 'active' && (
+            <>
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                {[
+                  { label: 'Total Active', value: activeShipments.length, color: darkMode ? 'text-white' : 'text-gray-900' },
+                  { label: 'In Transit', value: activeShipments.filter(s => ['departed_from_wh','under_customs','arrived_cn_kz','arrived_kz_uz'].includes(s.status)).length, color: 'text-orange-500' },
+                  { label: 'Heading to TAS', value: activeShipments.filter(s => s.status === 'heading_to_tas').length, color: 'text-green-500' },
+                ].map((stat) => (
+                  <div key={stat.label} className={`rounded-xl p-5 shadow-sm ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{stat.label}</p>
+                    <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
+                  </div>
+                ))}
+              </div>
+              <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Active Shipments</h2>
+              {renderTable(activeShipments)}
+            </>
+          )}
+
+          {activeSection === 'completed' && (
+            <>
+              <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Completed Shipments</h2>
+              {renderTable(completedShipments)}
+            </>
+          )}
+
+          {activeSection === 'guide' && (
+            <div className={`rounded-xl shadow-sm p-10 text-center ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
+              <p className="text-4xl mb-4">📖</p>
+              <h2 className={`text-xl font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>User Guide</h2>
+              <p className="text-gray-400">Coming soon...</p>
+            </div>
+          )}
+
+          {activeSection === 'feedback' && (
+            <div className={`rounded-xl shadow-sm p-10 text-center ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
+              <p className="text-4xl mb-4">💬</p>
+              <h2 className={`text-xl font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Feedback</h2>
+              <p className="text-gray-400">Coming soon...</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* New AWB Form */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-gray-900 mb-6">New AWB</h2>
-            
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Tracking Number</label>
-                <input
-                  value={form.tracking_number}
-                  onChange={(e) => setForm({...form, tracking_number: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                  placeholder="AWB-12345"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Customer</label>
-                <input
-                  value={form.client_name}
-                  onChange={(e) => setForm({...form, client_name: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                  placeholder="Company name"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Origin</label>
-                <input
-                  value={form.origin}
-                  onChange={(e) => setForm({...form, origin: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                  placeholder="Shanghai"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Destination</label>
-                <input
-                  value={form.destination}
-                  onChange={(e) => setForm({...form, destination: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                  placeholder="Tashkent"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Cargo Type</label>
-                <input
-                  value={form.cargo_type}
-                  onChange={(e) => setForm({...form, cargo_type: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                  placeholder="Electronics, clothing..."
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Weight (kg)</label>
-                <input
-                  type="number"
-                  value={form.weight_kg}
-                  onChange={(e) => setForm({...form, weight_kg: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                  placeholder="500"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Volume (m³)</label>
-                <input
-                  type="number"
-                  value={form.volume_m3}
-                  onChange={(e) => setForm({...form, volume_m3: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                  placeholder="2.5"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Flight Date</label>
-                <input
-                  type="date"
-                  value={form.estimated_departure}
-                  onChange={(e) => setForm({...form, estimated_departure: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Arrival Date</label>
-                <input
-                  type="date"
-                  value={form.estimated_arrival}
-                  onChange={(e) => setForm({...form, estimated_arrival: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                />
-              </div>
+              {[
+                { label: 'Tracking No.', key: 'tracking_number', placeholder: 'AWB-12345' },
+                { label: 'Client', key: 'client_name', placeholder: 'Company name' },
+                { label: 'Origin', key: 'origin', placeholder: 'Shanghai' },
+                { label: 'Destination', key: 'destination', placeholder: 'Tashkent' },
+                { label: 'Cargo Type', key: 'cargo_type', placeholder: 'Electronics' },
+                { label: 'Weight (kg)', key: 'weight_kg', placeholder: '500', type: 'number' },
+                { label: 'Volume (m³)', key: 'volume_m3', placeholder: '2.5', type: 'number' },
+                { label: 'Est. Departure', key: 'estimated_departure', type: 'date' },
+                { label: 'Est. Arrival', key: 'estimated_arrival', type: 'date' },
+              ].map(({ label, key, placeholder, type }) => (
+                <div key={key}>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">{label}</label>
+                  <input
+                    type={type || 'text'}
+                    value={(form as any)[key]}
+                    onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                    placeholder={placeholder}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              ))}
               <div className="col-span-2">
                 <label className="text-sm font-medium text-gray-700 mb-1 block">Notes</label>
                 <textarea
                   value={form.notes}
-                  onChange={(e) => setForm({...form, notes: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   rows={3}
                   placeholder="Additional information..."
                 />
               </div>
             </div>
-
             <div className="flex gap-3 mt-6">
-              <button
-                onClick={handleSubmit}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors"
-              >
+              <button onClick={handleSubmit} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg">
                 Create AWB
               </button>
-              <button
-                onClick={() => setShowForm(false)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-lg transition-colors"
-              >
+              <button onClick={() => setShowForm(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-lg">
                 Cancel
               </button>
             </div>
