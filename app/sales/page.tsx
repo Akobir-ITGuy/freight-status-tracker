@@ -41,6 +41,11 @@ export default function SalesPage() {
     }
   }
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    window.location.href = '/'
+  }
+
   const fetchShipments = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     const { data } = await supabase
@@ -65,6 +70,7 @@ export default function SalesPage() {
       weight_kg: parseFloat(form.weight_kg),
       volume_m3: parseFloat(form.volume_m3),
       status: 'shipment_confirmed',
+      fwb_status: 'na',
       created_by: user?.id,
       team: userData?.team
     })
@@ -95,6 +101,14 @@ export default function SalesPage() {
     fetchShipments()
   }
 
+  const updateFwb = async (shipmentId: string, fwbStatus: string) => {
+    await supabase
+      .from('shipments')
+      .update({ fwb_status: fwbStatus })
+      .eq('id', shipmentId)
+    fetchShipments()
+  }
+
   const statusLabels: any = {
     shipment_confirmed: 'Shipment Confirmed',
     arrived_at_wh: 'Arrived at W/H',
@@ -103,26 +117,6 @@ export default function SalesPage() {
     arrived_cn_kz: 'Arrived at CN/KZ Border',
     arrived_kz_uz: 'Arrived at KZ/UZ Border',
     heading_to_tas: 'Heading to TAS',
-    at_airport: 'At Airport',
-    departed: 'Departed',
-    arrived_destination: 'Arrived at Destination',
-    completed: 'Completed',
-    postponed: 'Postponed'
-  }
-
-  const statusColors: any = {
-    shipment_confirmed: 'bg-blue-100 text-blue-800',
-    arrived_at_wh: 'bg-yellow-100 text-yellow-800',
-    departed_from_wh: 'bg-orange-100 text-orange-800',
-    under_customs: 'bg-purple-100 text-purple-800',
-    arrived_cn_kz: 'bg-indigo-100 text-indigo-800',
-    arrived_kz_uz: 'bg-cyan-100 text-cyan-800',
-    heading_to_tas: 'bg-green-100 text-green-800',
-    at_airport: 'bg-green-200 text-green-900',
-    departed: 'bg-teal-100 text-teal-800',
-    arrived_destination: 'bg-emerald-100 text-emerald-800',
-    completed: 'bg-gray-100 text-gray-800',
-    postponed: 'bg-red-100 text-red-800'
   }
 
   const salesStatuses = [
@@ -150,16 +144,16 @@ export default function SalesPage() {
       <table className="w-full">
         <thead className={`border-b ${darkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
           <tr>
-            {['Tracking No.', 'Client', 'Route', 'Weight', 'Departure', 'Status'].map(h => (
+            {['Tracking No.', 'Client', 'Route', 'Weight', 'Departure', 'FWB', 'Status'].map(h => (
               <th key={h} className={`text-left px-6 py-3 text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody className={`divide-y ${darkMode ? 'divide-gray-600' : 'divide-gray-100'}`}>
           {loading ? (
-            <tr><td colSpan={6} className="text-center py-10 text-gray-400">Loading...</td></tr>
+            <tr><td colSpan={7} className="text-center py-10 text-gray-400">Loading...</td></tr>
           ) : data.length === 0 ? (
-            <tr><td colSpan={6} className="text-center py-10 text-gray-400">No AWBs yet</td></tr>
+            <tr><td colSpan={7} className="text-center py-10 text-gray-400">No AWBs yet</td></tr>
           ) : (
             data.map((s) => (
               <tr key={s.id} className={darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-50'}>
@@ -168,6 +162,21 @@ export default function SalesPage() {
                 <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.origin} → {s.destination}</td>
                 <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.weight_kg} kg</td>
                 <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.estimated_departure}</td>
+                <td className="px-6 py-4">
+                  <select
+                    value={s.fwb_status || 'na'}
+                    onChange={(e) => updateFwb(s.id, e.target.value)}
+                    className={`text-sm border rounded-lg px-2 py-1 font-medium ${
+                      s.fwb_status === 'sent' ? 'bg-green-100 text-green-800 border-green-200' :
+                      s.fwb_status === 'not_sent' ? 'bg-red-100 text-red-800 border-red-200' :
+                      'bg-gray-100 text-gray-600 border-gray-200'
+                    }`}
+                  >
+                    <option value="na">N/A</option>
+                    <option value="not_sent">Not Sent</option>
+                    <option value="sent">Sent</option>
+                  </select>
+                </td>
                 <td className="px-6 py-4">
                   {activeSection === 'active' ? (
                     <select
@@ -180,8 +189,8 @@ export default function SalesPage() {
                       ))}
                     </select>
                   ) : (
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[s.status]}`}>
-                      {statusLabels[s.status]}
+                    <span className="text-xs px-2 py-1 rounded-full font-medium bg-gray-100 text-gray-800">
+                      {statusLabels[s.status] || s.status}
                     </span>
                   )}
                 </td>
@@ -195,8 +204,6 @@ export default function SalesPage() {
 
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
-
-      {/* Header */}
       <div className={`border-b px-8 py-4 flex items-center justify-between ${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white'}`}>
         <div className="flex items-center gap-4">
           <button
@@ -229,11 +236,16 @@ export default function SalesPage() {
           >
             {darkMode ? '☀️ Light' : '🌙 Dark'}
           </button>
+          <button
+            onClick={handleLogout}
+            className="px-3 py-2 rounded-lg text-sm font-medium bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
+          >
+            🚪 Logout
+          </button>
         </div>
       </div>
 
       <div className="flex">
-        {/* Sidebar */}
         {menuOpen && (
           <div className={`w-64 min-h-screen border-r shadow-sm ${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white'}`}>
             <nav className="p-4 flex flex-col gap-1">
@@ -255,14 +267,13 @@ export default function SalesPage() {
           </div>
         )}
 
-        {/* Main Content */}
         <div className="flex-1 p-8">
           {activeSection === 'active' && (
             <>
               <div className="grid grid-cols-3 gap-4 mb-6">
                 {[
                   { label: 'Total Active', value: activeShipments.length, color: darkMode ? 'text-white' : 'text-gray-900' },
-                  { label: 'In Transit', value: activeShipments.filter(s => ['departed_from_wh','under_customs','arrived_cn_kz','arrived_kz_uz'].includes(s.status)).length, color: 'text-orange-500' },
+                  { label: 'In Transit', value: activeShipments.filter(s => ['departed_from_wh', 'under_customs', 'arrived_cn_kz', 'arrived_kz_uz'].includes(s.status)).length, color: 'text-orange-500' },
                   { label: 'Heading to TAS', value: activeShipments.filter(s => s.status === 'heading_to_tas').length, color: 'text-green-500' },
                 ].map((stat) => (
                   <div key={stat.label} className={`rounded-xl p-5 shadow-sm ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
@@ -301,7 +312,6 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {/* New AWB Form */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
 
 export default function SpecialistPage() {
   const [shipments, setShipments] = useState<any[]>([])
@@ -11,10 +12,16 @@ export default function SpecialistPage() {
   const [darkMode, setDarkMode] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [activeSection, setActiveSection] = useState('active')
+  const router = useRouter()
 
   useEffect(() => {
     getUser()
   }, [])
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    window.location.href = '/'
+  }
 
   const getUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -95,7 +102,7 @@ export default function SpecialistPage() {
             <tr><td colSpan={6} className="text-center py-10 text-gray-400">No AWBs assigned yet</td></tr>
           ) : (
             data.map((s) => (
-              <tr key={s.id} className={darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-50'}>
+              <tr key={s.id} onClick={() => router.push(`/shipment/${s.id}`)} className={`cursor-pointer ${darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-50'}`}>
                 <td className={`px-6 py-4 font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.tracking_number}</td>
                 <td className={`px-6 py-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{s.client_name}</td>
                 <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.origin} → {s.destination}</td>
@@ -157,6 +164,12 @@ export default function SpecialistPage() {
             className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${darkMode ? 'bg-gray-700 text-yellow-400 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
           >
             {darkMode ? '☀️ Light' : '🌙 Dark'}
+          </button>
+          <button
+            onClick={handleLogout}
+            className="px-3 py-2 rounded-lg text-sm font-medium bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
+          >
+            🚪 Logout
           </button>
         </div>
       </div>

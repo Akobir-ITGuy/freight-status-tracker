@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
 
 export default function ManagerPage() {
   const [shipments, setShipments] = useState<any[]>([])
@@ -11,6 +12,7 @@ export default function ManagerPage() {
   const [activeSection, setActiveSection] = useState('active')
   const [darkMode, setDarkMode] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const router = useRouter()
 
   useEffect(() => {
     fetchData()
@@ -27,6 +29,11 @@ export default function ManagerPage() {
         .single()
       setCurrentUser(data)
     }
+  }
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    window.location.href = '/'
   }
 
   const fetchData = async () => {
@@ -86,6 +93,7 @@ export default function ManagerPage() {
   const menuItems = [
     { id: 'active', label: 'Active Shipments', icon: '📦' },
     { id: 'completed', label: 'Completed Shipments', icon: '✅' },
+    { id: 'trucks', label: 'Trucks', icon: '🚛' },
     { id: 'guide', label: 'User Guide', icon: '📖' },
     { id: 'feedback', label: 'Feedback', icon: '💬' },
   ]
@@ -95,24 +103,19 @@ export default function ManagerPage() {
       <table className="w-full">
         <thead className={`border-b ${darkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
           <tr>
-            <th className={`text-left px-6 py-3 text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Tracking No.</th>
-            <th className={`text-left px-6 py-3 text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Client</th>
-            <th className={`text-left px-6 py-3 text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Route</th>
-            <th className={`text-left px-6 py-3 text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Weight</th>
-            <th className={`text-left px-6 py-3 text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Departure</th>
-            <th className={`text-left px-6 py-3 text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Team</th>
-            <th className={`text-left px-6 py-3 text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Specialist</th>
-            <th className={`text-left px-6 py-3 text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Status</th>
+            {['Tracking No.', 'Client', 'Route', 'Weight', 'Departure', 'Team', 'FWB', 'Specialist', 'Status'].map(h => (
+              <th key={h} className={`text-left px-6 py-3 text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{h}</th>
+            ))}
           </tr>
         </thead>
         <tbody className={`divide-y ${darkMode ? 'divide-gray-600' : 'divide-gray-100'}`}>
           {loading ? (
-            <tr><td colSpan={7} className="text-center py-10 text-gray-400">Loading...</td></tr>
+            <tr><td colSpan={9} className="text-center py-10 text-gray-400">Loading...</td></tr>
           ) : data.length === 0 ? (
-            <tr><td colSpan={7} className="text-center py-10 text-gray-400">No AWBs yet</td></tr>
+            <tr><td colSpan={9} className="text-center py-10 text-gray-400">No AWBs yet</td></tr>
           ) : (
             data.map((s) => (
-              <tr key={s.id} className={`${darkMode ? 'hover:bg-gray-600 divide-gray-600' : 'hover:bg-gray-50'}`}>
+              <tr key={s.id} onClick={() => router.push(`/shipment/${s.id}`)} className={`cursor-pointer ${darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-50'}`}>
                 <td className={`px-6 py-4 font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.tracking_number}</td>
                 <td className={`px-6 py-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{s.client_name}</td>
                 <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.origin} → {s.destination}</td>
@@ -121,7 +124,16 @@ export default function ManagerPage() {
                 <td className={`px-6 py-4 text-sm font-medium ${s.team === 'BEY Team' ? 'text-blue-500' : s.team === 'KUL Team' ? 'text-green-500' : 'text-gray-400'}`}>
                   {s.team || '—'}
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                    s.fwb_status === 'sent' ? 'bg-green-100 text-green-800' :
+                    s.fwb_status === 'not_sent' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>
+                    {s.fwb_status === 'sent' ? 'Sent' : s.fwb_status === 'not_sent' ? 'Not Sent' : 'N/A'}
+                  </span>
+                </td>
+                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                   {showStatusDropdown ? (
                     <select
                       value={s.assigned_specialist || ''}
@@ -139,12 +151,12 @@ export default function ManagerPage() {
                     </span>
                   )}
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                   {showStatusDropdown ? (
                     <select
                       value={s.status}
                       onChange={(e) => updateStatus(s.id, e.target.value)}
-                      className={`text-sm border rounded-lg px-2 py-1 ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'border-gray-200 text-gray-700 bg-white'}`}
+                      className={`text-sm border rounded-lg px-2 py-1 ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-700'}`}
                     >
                       {Object.entries(statusLabels).map(([value, label]) => (
                         <option key={value} value={value}>{label as string}</option>
@@ -166,9 +178,7 @@ export default function ManagerPage() {
 
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
-
-      {/* Header */}
-      <div className={`${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-b'} border-b px-8 py-4 flex items-center justify-between`}>
+      <div className={`border-b px-8 py-4 flex items-center justify-between ${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white'}`}>
         <div className="flex items-center gap-4">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
@@ -190,20 +200,20 @@ export default function ManagerPage() {
           )}
           <button
             onClick={() => setDarkMode(!darkMode)}
-            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              darkMode
-                ? 'bg-gray-700 text-yellow-400 hover:bg-gray-600'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${darkMode ? 'bg-gray-700 text-yellow-400 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
           >
             {darkMode ? '☀️ Light' : '🌙 Dark'}
+          </button>
+          <button
+            onClick={handleLogout}
+            className="px-3 py-2 rounded-lg text-sm font-medium bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
+          >
+            🚪 Logout
           </button>
         </div>
       </div>
 
       <div className="flex">
-
-        {/* Sidebar */}
         {menuOpen && (
           <div className={`w-64 min-h-screen border-r shadow-sm ${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white'}`}>
             <nav className="p-4 flex flex-col gap-1">
@@ -225,36 +235,26 @@ export default function ManagerPage() {
           </div>
         )}
 
-        {/* Main Content */}
         <div className="flex-1 p-8">
-
-          {/* Active Shipments */}
           {activeSection === 'active' && (
             <>
               <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className={`rounded-xl p-5 shadow-sm ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
-                  <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Total Active</p>
-                  <p className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{activeShipments.length}</p>
-                </div>
-                <div className={`rounded-xl p-5 shadow-sm ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
-                  <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>In Progress</p>
-                  <p className="text-3xl font-bold text-orange-500">
-                    {activeShipments.filter(s => ['in_progress', 'at_airport', 'truck_arrived'].includes(s.status)).length}
-                  </p>
-                </div>
-                <div className={`rounded-xl p-5 shadow-sm ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
-                  <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Pending</p>
-                  <p className="text-3xl font-bold text-yellow-500">
-                    {activeShipments.filter(s => s.status === 'pending').length}
-                  </p>
-                </div>
+                {[
+                  { label: 'Total Active', value: activeShipments.length, color: darkMode ? 'text-white' : 'text-gray-900' },
+                  { label: 'In Progress', value: activeShipments.filter(s => ['at_airport', 'departed'].includes(s.status)).length, color: 'text-orange-500' },
+                  { label: 'Pending', value: activeShipments.filter(s => s.status === 'heading_to_tas').length, color: 'text-yellow-500' },
+                ].map((stat) => (
+                  <div key={stat.label} className={`rounded-xl p-5 shadow-sm ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{stat.label}</p>
+                    <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
+                  </div>
+                ))}
               </div>
               <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Active Shipments</h2>
               {renderTable(activeShipments, true)}
             </>
           )}
 
-          {/* Completed Shipments */}
           {activeSection === 'completed' && (
             <>
               <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Completed Shipments</h2>
@@ -262,24 +262,32 @@ export default function ManagerPage() {
             </>
           )}
 
-          {/* User Guide */}
+          {activeSection === 'trucks' && (
+            <div className={`rounded-xl shadow-sm p-10 text-center ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
+              <button
+                onClick={() => router.push('/trucks')}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg"
+              >
+                🚛 Open Trucks Module
+              </button>
+            </div>
+          )}
+
           {activeSection === 'guide' && (
-            <div className="bg-white rounded-xl shadow-sm p-10 text-center">
+            <div className={`rounded-xl shadow-sm p-10 text-center ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
               <p className="text-4xl mb-4">📖</p>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">User Guide</h2>
+              <h2 className={`text-xl font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>User Guide</h2>
               <p className="text-gray-400">Coming soon...</p>
             </div>
           )}
 
-          {/* Feedback */}
           {activeSection === 'feedback' && (
-            <div className="bg-white rounded-xl shadow-sm p-10 text-center">
+            <div className={`rounded-xl shadow-sm p-10 text-center ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
               <p className="text-4xl mb-4">💬</p>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Feedback</h2>
+              <h2 className={`text-xl font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Feedback</h2>
               <p className="text-gray-400">Coming soon...</p>
             </div>
           )}
-
         </div>
       </div>
     </div>
