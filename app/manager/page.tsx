@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import TrucksSection from '../components/TrucksSection'
 
 export default function ManagerPage() {
   const [shipments, setShipments] = useState<any[]>([])
@@ -10,7 +11,12 @@ export default function ManagerPage() {
   const [loading, setLoading] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('active')
-  const [darkMode, setDarkMode] = useState(false)
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('darkMode') === 'true'
+    }
+    return true
+  })
   const [currentUser, setCurrentUser] = useState<any>(null)
   const router = useRouter()
 
@@ -86,9 +92,20 @@ export default function ManagerPage() {
     postponed: 'bg-red-100 text-red-800'
   }
 
+  const [search, setSearch] = useState('')
   const opsStatuses = ['heading_to_tas', 'at_airport', 'departed', 'arrived_destination', 'completed', 'postponed']
   const activeShipments = shipments.filter(s => opsStatuses.includes(s.status) && s.status !== 'completed')
   const completedShipments = shipments.filter(s => s.status === 'completed')
+
+  const filterShipments = (data: any[]) => {
+    if (!search) return data
+    return data.filter(s =>
+      s.tracking_number?.toLowerCase().includes(search.toLowerCase()) ||
+      s.client_name?.toLowerCase().includes(search.toLowerCase()) ||
+      s.origin?.toLowerCase().includes(search.toLowerCase()) ||
+      s.destination?.toLowerCase().includes(search.toLowerCase())
+    )
+  }
 
   const menuItems = [
     { id: 'active', label: 'Active Shipments', icon: '📦' },
@@ -199,7 +216,11 @@ export default function ManagerPage() {
             </span>
           )}
           <button
-            onClick={() => setDarkMode(!darkMode)}
+            onClick={() => {
+              const newMode = !darkMode
+              setDarkMode(newMode)
+              localStorage.setItem('darkMode', String(newMode))
+            }}
             className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${darkMode ? 'bg-gray-700 text-yellow-400 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
           >
             {darkMode ? '☀️ Light' : '🌙 Dark'}
@@ -250,42 +271,69 @@ export default function ManagerPage() {
                   </div>
                 ))}
               </div>
-              <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Active Shipments</h2>
-              {renderTable(activeShipments, true)}
+              <div className="flex justify-between items-center mb-4">
+                <h2 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Active Shipments</h2>
+                <input
+                  type="text"
+                  placeholder="Search by AWB, client, route..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className={`border rounded-lg px-4 py-2 text-sm w-72 focus:outline-none focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900'}`}
+                />
+              </div>
+              {renderTable(filterShipments(activeShipments), true)}
             </>
           )}
 
           {activeSection === 'completed' && (
             <>
-              <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Completed Shipments</h2>
-              {renderTable(completedShipments, false)}
+              <div className="flex justify-between items-center mb-4">
+                <h2 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Completed Shipments</h2>
+                <input
+                  type="text"
+                  placeholder="Search by AWB, client, route..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className={`border rounded-lg px-4 py-2 text-sm w-72 focus:outline-none focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900'}`}
+                />
+              </div>
+              {renderTable(filterShipments(completedShipments), false)}
             </>
           )}
 
           {activeSection === 'trucks' && (
-            <div className={`rounded-xl shadow-sm p-10 text-center ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
-              <button
-                onClick={() => router.push('/trucks')}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg"
-              >
-                🚛 Open Trucks Module
-              </button>
-            </div>
+            <TrucksSection darkMode={darkMode} currentUser={currentUser} />
           )}
 
           {activeSection === 'guide' && (
-            <div className={`rounded-xl shadow-sm p-10 text-center ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
-              <p className="text-4xl mb-4">📖</p>
-              <h2 className={`text-xl font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>User Guide</h2>
-              <p className="text-gray-400">Coming soon...</p>
+            <div className={`rounded-xl shadow-sm p-10 text-center max-w-lg mx-auto ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
+              <p className="text-5xl mb-4">📖</p>
+              <h2 className={`text-xl font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>User Guide</h2>
+              <div className={`rounded-lg p-4 mb-4 ${darkMode ? 'bg-yellow-900/30 border border-yellow-700' : 'bg-yellow-50 border border-yellow-200'}`}>
+                <p className="text-yellow-600 text-sm font-medium">⚠️ Beta Version</p>
+              </div>
+              <p className={`text-sm leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                This is a Test Product and has not been officially released yet. If you have access to it, please refer to <span className="font-semibold">Akobir</span> regarding the usage of this application.
+              </p>
             </div>
           )}
 
           {activeSection === 'feedback' && (
-            <div className={`rounded-xl shadow-sm p-10 text-center ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
-              <p className="text-4xl mb-4">💬</p>
-              <h2 className={`text-xl font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Feedback</h2>
-              <p className="text-gray-400">Coming soon...</p>
+            <div className={`rounded-xl shadow-sm p-10 text-center max-w-lg mx-auto ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
+              <p className="text-5xl mb-4">💬</p>
+              <h2 className={`text-xl font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Feedback</h2>
+              <p className={`text-sm leading-relaxed mb-6 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                Should you have any questions or feedback, please reach out to:
+              </p>
+              <div className={`rounded-lg p-4 ${darkMode ? 'bg-gray-600' : 'bg-gray-50'}`}>
+                <p className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Akobir Yuldashev</p>
+                <button
+                  onClick={() => window.location.href = 'mailto:ayuldashev@gmail.com'}
+                  className="text-blue-500 hover:text-blue-600 text-sm font-medium"
+                >
+                  ayuldashev@gmail.com
+                </button>
+              </div>
             </div>
           )}
         </div>

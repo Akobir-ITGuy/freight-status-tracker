@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import TrucksSection from '../components/TrucksSection'
 import { useRouter } from 'next/navigation'
 
 export default function SpecialistPage() {
@@ -9,7 +10,12 @@ export default function SpecialistPage() {
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string>('')
   const [menuOpen, setMenuOpen] = useState(false)
-  const [darkMode, setDarkMode] = useState(false)
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('darkMode') === 'true'
+    }
+    return true
+  })
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [activeSection, setActiveSection] = useState('active')
   const router = useRouter()
@@ -81,6 +87,7 @@ export default function SpecialistPage() {
   const menuItems = [
     { id: 'active', label: 'Active Shipments', icon: '📦' },
     { id: 'completed', label: 'Completed Shipments', icon: '✅' },
+    { id: 'trucks', label: 'Trucks', icon: '🚛' },
     { id: 'guide', label: 'User Guide', icon: '📖' },
     { id: 'feedback', label: 'Feedback', icon: '💬' },
   ]
@@ -160,7 +167,11 @@ export default function SpecialistPage() {
             </span>
           )}
           <button
-            onClick={() => setDarkMode(!darkMode)}
+            onClick={() => {
+              const newMode = !darkMode
+              setDarkMode(newMode)
+              localStorage.setItem('darkMode', String(newMode))
+            }}
             className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${darkMode ? 'bg-gray-700 text-yellow-400 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
           >
             {darkMode ? '☀️ Light' : '🌙 Dark'}
@@ -223,6 +234,10 @@ export default function SpecialistPage() {
               <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Completed Shipments</h2>
               {renderTable(completedShipments, false)}
             </>
+          )}
+
+          {activeSection === 'trucks' && (
+            <TrucksSection darkMode={darkMode} currentUser={currentUser} />
           )}
 
           {activeSection === 'guide' && (

@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
 
 export default function TrucksPage() {
   const [trucks, setTrucks] = useState<any[]>([])
   const [shipments, setShipments] = useState<any[]>([])
+  const [truckShipments, setTruckShipments] = useState<{[key: string]: any[]}>({})
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [showExpenseForm, setShowExpenseForm] = useState(false)
@@ -15,12 +15,10 @@ export default function TrucksPage() {
   const [darkMode, setDarkMode] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('active')
-  const router = useRouter()
 
   const [truckForm, setTruckForm] = useState({
     truck_number: '',
-    origin: 'China',
-    destination: 'Tashkent',
+    truck_reference: '',
     departure_date: '',
     arrival_date: ''
   })
@@ -60,6 +58,20 @@ export default function TrucksPage() {
       .select('*, truck_expenses(*)')
       .order('created_at', { ascending: false })
     setTrucks(data || [])
+
+    // Fetch shipments for each truck
+    if (data) {
+      const truckShipmentsMap: {[key: string]: any[]} = {}
+      for (const truck of data) {
+        const { data: sData } = await supabase
+          .from('shipments')
+          .select('*')
+          .eq('truck_id', truck.id)
+        truckShipmentsMap[truck.id] = sData || []
+      }
+      setTruckShipments(truckShipmentsMap)
+    }
+
     setLoading(false)
   }
 
@@ -74,18 +86,17 @@ export default function TrucksPage() {
   const createTruck = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     const { error } = await supabase.from('trucks').insert({
-      ...truckForm,
+      truck_number: truckForm.truck_number,
+      truck_reference: truckForm.truck_reference,
+      origin: 'China',
+      destination: 'Tashkent',
+      departure_date: truckForm.departure_date,
+      arrival_date: truckForm.arrival_date,
       created_by: user?.id
     })
     if (!error) {
       setShowForm(false)
-      setTruckForm({
-        truck_number: '',
-        origin: 'China',
-        destination: 'Tashkent',
-        departure_date: '',
-        arrival_date: ''
-      })
+      setTruckForm({ truck_number: '', truck_reference: '', departure_date: '', arrival_date: '' })
       fetchTrucks()
     }
   }
@@ -114,12 +125,20 @@ export default function TrucksPage() {
     fetchTrucks()
   }
 
+  const removeShipment = async (shipmentId: string) => {
+    await supabase
+      .from('shipments')
+      .update({ truck_id: null })
+      .eq('id', shipmentId)
+    fetchShipments()
+    fetchTrucks()
+  }
+
   const updateTruckStatus = async (truckId: string, status: string) => {
     await supabase
       .from('trucks')
       .update({ status })
       .eq('id', truckId)
-
     if (status === 'unloaded') {
       await distributeExpenses(truckId)
     }
@@ -127,7 +146,7 @@ export default function TrucksPage() {
   }
 
   const distributeExpenses = async (truckId: string) => {
-    const { data: truckShipments } = await supabase
+    const { data: truckShipmentsList } = await supabase
       .from('shipments')
       .select('id, weight_kg')
       .eq('truck_id', truckId)
@@ -137,12 +156,12 @@ export default function TrucksPage() {
       .select('amount')
       .eq('truck_id', truckId)
 
-    if (!truckShipments || !expenses) return
+    if (!truckShipmentsList || !expenses) return
 
     const totalExpense = expenses.reduce((sum, e) => sum + e.amount, 0)
-    const totalWeight = truckShipments.reduce((sum, s) => sum + s.weight_kg, 0)
+    const totalWeight = truckShipmentsList.reduce((sum, s) => sum + s.weight_kg, 0)
 
-    for (const shipment of truckShipments) {
+    for (const shipment of truckShipmentsList) {
       const share = (shipment.weight_kg / totalWeight) * totalExpense
       await supabase.from('expenses').insert({
         shipment_id: shipment.id,
@@ -171,13 +190,12 @@ export default function TrucksPage() {
 
   const activeTrucks = trucks.filter(t => t.status !== 'unloaded')
   const archivedTrucks = trucks.filter(t => t.status === 'unloaded')
+  const isManager = currentUser?.role === 'ops_manager'
 
   const menuItems = [
     { id: 'active', label: 'Active Trucks', icon: '🚛' },
     { id: 'archived', label: 'Archived Trucks', icon: '📦' },
   ]
-
-  const isManager = currentUser?.role === 'ops_manager'
 
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
@@ -191,6 +209,12 @@ export default function TrucksPage() {
             <span className={`w-5 h-0.5 block ${darkMode ? 'bg-gray-300' : 'bg-gray-700'}`}></span>
             <span className={`w-5 h-0.5 block ${darkMode ? 'bg-gray-300' : 'bg-gray-700'}`}></span>
             <span className={`w-5 h-0.5 block ${darkMode ? 'bg-gray-300' : 'bg-gray-700'}`}></span>
+          </button>
+          <button
+            onClick={() => window.location.href = '/manager'}
+            className={`text-sm font-medium ${darkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            ← Back
           </button>
           <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
             Freight Status Tracker — Trucks
@@ -252,23 +276,35 @@ export default function TrucksPage() {
             <div className="flex flex-col gap-6">
               {(activeSection === 'active' ? activeTrucks : archivedTrucks).map((truck) => {
                 const totalExpense = truck.truck_expenses?.reduce((sum: number, e: any) => sum + e.amount, 0) || 0
+                const assignedShipments = truckShipments[truck.id] || []
+                const totalWeight = assignedShipments.reduce((sum, s) => sum + s.weight_kg, 0)
+
                 return (
                   <div key={truck.id} className={`rounded-xl shadow-sm p-6 ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
+                    {/* Truck Header */}
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <div className="flex items-center gap-3">
                           <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                             🚛 {truck.truck_number}
                           </h3>
+                          {truck.truck_reference && (
+                            <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                              Ref: {truck.truck_reference}
+                            </span>
+                          )}
                           <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[truck.status]}`}>
                             {statusLabels[truck.status]}
                           </span>
                         </div>
                         <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                          {truck.origin} → {truck.destination}
+                          China → Tashkent
                         </p>
                         <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                           Departure: {truck.departure_date || '—'} | Arrival: {truck.arrival_date || '—'}
+                        </p>
+                        <p className={`text-sm font-medium mt-1 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                          Total Weight: {totalWeight.toLocaleString()} kg | AWBs: {assignedShipments.length}
                         </p>
                       </div>
                       {isManager && activeSection === 'active' && (
@@ -276,7 +312,7 @@ export default function TrucksPage() {
                           <select
                             value={truck.status}
                             onChange={(e) => updateTruckStatus(truck.id, e.target.value)}
-                            className="text-sm border border-gray-200 rounded-lg px-2 py-1 text-gray-700"
+                            className={`text-sm border rounded-lg px-2 py-1 ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'border-gray-200 text-gray-700'}`}
                           >
                             {Object.entries(statusLabels).map(([value, label]) => (
                               <option key={value} value={value}>{label as string}</option>
@@ -292,17 +328,52 @@ export default function TrucksPage() {
                       )}
                     </div>
 
+                    {/* Assigned AWBs */}
+                    {assignedShipments.length > 0 && (
+                      <div className={`rounded-lg p-4 mb-4 ${darkMode ? 'bg-gray-600' : 'bg-blue-50'}`}>
+                        <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-blue-700'}`}>
+                          Assigned AWBs ({assignedShipments.length})
+                        </p>
+                        <div className="flex flex-col gap-2">
+                          {assignedShipments.map((s) => (
+                            <div key={s.id} className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                  {s.tracking_number}
+                                </span>
+                                <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  {s.client_name} — {s.weight_kg} kg
+                                </span>
+                              </div>
+                              {activeSection === 'active' && (
+                                <button
+                                  onClick={() => removeShipment(s.id)}
+                                  className="text-red-500 hover:text-red-600 text-xs font-medium"
+                                >
+                                  Remove
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Expenses */}
                     {truck.truck_expenses?.length > 0 && (
-                      <div className={`rounded-lg p-4 mb-4 ${darkMode ? 'bg-gray-600' : 'bg-gray-50'}`}>
-                        <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <div className={`rounded-lg p-4 mb-4 ${darkMode ? 'bg-gray-600' : 'bg-orange-50'}`}>
+                        <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-orange-700'}`}>
                           Expenses — Total: {totalExpense.toLocaleString()} UZS
                         </p>
                         <div className="flex flex-col gap-1">
                           {truck.truck_expenses.map((exp: any) => (
                             <div key={exp.id} className="flex justify-between text-sm">
-                              <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>{exp.category} {exp.description ? `— ${exp.description}` : ''}</span>
-                              <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{exp.amount.toLocaleString()} UZS</span>
+                              <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                                {exp.category}{exp.description ? ` — ${exp.description}` : ''}
+                              </span>
+                              <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                {exp.amount.toLocaleString()} UZS
+                              </span>
                             </div>
                           ))}
                         </div>
@@ -313,12 +384,12 @@ export default function TrucksPage() {
                     {activeSection === 'active' && (
                       <div>
                         <p className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                          Assign AWBs to this truck:
+                          Assign AWB to this truck:
                         </p>
                         <select
                           onChange={(e) => { if (e.target.value) assignShipment(e.target.value, truck.id) }}
-                          className="text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 w-full"
-                          defaultValue=""
+                          className={`text-sm border rounded-lg px-3 py-2 w-full ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-700'}`}
+                          value=""
                         >
                           <option value="">Select AWB to assign...</option>
                           {shipments.map((s) => (
@@ -351,9 +422,8 @@ export default function TrucksPage() {
             <h2 className="text-xl font-bold text-gray-900 mb-6">New Truck</h2>
             <div className="flex flex-col gap-4">
               {[
-                { label: 'Truck Number', key: 'truck_number', placeholder: '01 A 123 BC' },
-                { label: 'Origin', key: 'origin', placeholder: 'China' },
-                { label: 'Destination', key: 'destination', placeholder: 'Tashkent' },
+                { label: 'Plate Number', key: 'truck_number', placeholder: '01 A 123 BC' },
+                { label: 'Reference Number', key: 'truck_reference', placeholder: 'REF-12345' },
                 { label: 'Departure Date', key: 'departure_date', type: 'date' },
                 { label: 'Arrival Date', key: 'arrival_date', type: 'date' },
               ].map(({ label, key, placeholder, type }) => (
