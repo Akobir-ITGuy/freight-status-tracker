@@ -97,8 +97,8 @@ export default function SpecialistPage() {
       <table className="w-full">
         <thead className={`border-b ${darkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
           <tr>
-            {['Tracking No.', 'Client', 'Route', 'Weight', 'Departure', 'Status'].map(h => (
-              <th key={h} className={`text-left px-6 py-3 text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{h}</th>
+            {['AWB', 'DEST', 'STD', 'Flight', 'Pcs', 'GW', 'Status', 'Notes'].map(h => (
+              <th key={h} className={`text-left px-6 py-3 text-sm font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -111,10 +111,13 @@ export default function SpecialistPage() {
             data.map((s) => (
               <tr key={s.id} onClick={() => router.push(`/shipment/${s.id}`)} className={`cursor-pointer ${darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-50'}`}>
                 <td className={`px-6 py-4 font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.tracking_number}</td>
-                <td className={`px-6 py-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{s.client_name}</td>
-                <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.origin} → {s.destination}</td>
-                <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.weight_kg} kg</td>
-                <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.estimated_departure}</td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.destination}</td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {s.estimated_departure ? new Date(s.estimated_departure).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                </td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.flight_number || '—'}</td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.pcs || '—'}</td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.weight_kg} kg</td>
                 <td className="px-6 py-4">
                   {showDropdown ? (
                     <select
@@ -133,6 +136,9 @@ export default function SpecialistPage() {
                       {statusLabels[s.status]}
                     </span>
                   )}
+                </td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {s.notes ? s.notes.substring(0, 30) + (s.notes.length > 30 ? '...' : '') : '—'}
                 </td>
               </tr>
             ))

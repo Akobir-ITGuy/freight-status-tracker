@@ -45,7 +45,7 @@ export default function ManagerPage() {
   const fetchData = async () => {
     const { data: shipmentsData } = await supabase
       .from('shipments')
-      .select('*')
+      .select('*, expenses(*)')
       .order('created_at', { ascending: false })
 
     const { data: specialistsData } = await supabase
@@ -71,6 +71,16 @@ export default function ManagerPage() {
       .from('shipments')
       .update({ status })
       .eq('id', shipmentId)
+    fetchData()
+  }
+
+  const deleteShipment = async (shipmentId: string) => {
+    if (!confirm('Are you sure you want to delete this AWB?')) return
+    await supabase.from('expenses').delete().eq('shipment_id', shipmentId)
+    await supabase.from('documents').delete().eq('shipment_id', shipmentId)
+    await supabase.from('shipment_logs').delete().eq('shipment_id', shipmentId)
+    await supabase.from('shipment_statuses').delete().eq('shipment_id', shipmentId)
+    await supabase.from('shipments').delete().eq('id', shipmentId)
     fetchData()
   }
 
@@ -117,11 +127,12 @@ export default function ManagerPage() {
 
   const renderTable = (data: any[], showStatusDropdown: boolean) => (
     <div className={`rounded-xl shadow-sm overflow-hidden ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
-      <table className="w-full">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-max">
         <thead className={`border-b ${darkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
           <tr>
-            {['Tracking No.', 'Client', 'Route', 'Weight', 'Departure', 'Team', 'FWB', 'Specialist', 'Status'].map(h => (
-              <th key={h} className={`text-left px-6 py-3 text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{h}</th>
+            {['AWB', 'DEST', 'STD', 'Flight', 'Pcs', 'GW', 'Status', 'FWB', 'Expenses', 'Handler', 'Notes', ''].map(h => (
+              <th key={h} className={`text-left px-6 py-3 text-sm font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -134,40 +145,13 @@ export default function ManagerPage() {
             data.map((s) => (
               <tr key={s.id} onClick={() => router.push(`/shipment/${s.id}`)} className={`cursor-pointer ${darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-50'}`}>
                 <td className={`px-6 py-4 font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.tracking_number}</td>
-                <td className={`px-6 py-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{s.client_name}</td>
-                <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.origin} → {s.destination}</td>
-                <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.weight_kg} kg</td>
-                <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.estimated_departure}</td>
-                <td className={`px-6 py-4 text-sm font-medium ${s.team === 'BEY Team' ? 'text-blue-500' : s.team === 'KUL Team' ? 'text-green-500' : 'text-gray-400'}`}>
-                  {s.team || '—'}
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.destination}</td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {s.estimated_departure ? new Date(s.estimated_departure).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                 </td>
-                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                    s.fwb_status === 'sent' ? 'bg-green-100 text-green-800' :
-                    s.fwb_status === 'not_sent' ? 'bg-red-100 text-red-800' :
-                    'bg-gray-100 text-gray-600'
-                  }`}>
-                    {s.fwb_status === 'sent' ? 'Sent' : s.fwb_status === 'not_sent' ? 'Not Sent' : 'N/A'}
-                  </span>
-                </td>
-                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                  {showStatusDropdown ? (
-                    <select
-                      value={s.assigned_specialist || ''}
-                      onChange={(e) => assignSpecialist(s.id, e.target.value)}
-                      className={`text-sm border rounded-lg px-2 py-1 ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'border-gray-200 text-gray-700'}`}
-                    >
-                      <option value="">Not assigned</option>
-                      {specialists.map((sp) => (
-                        <option key={sp.id} value={sp.id}>{sp.full_name}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className="text-gray-500 text-sm">
-                      {specialists.find(sp => sp.id === s.assigned_specialist)?.full_name || '—'}
-                    </span>
-                  )}
-                </td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.flight_number || '—'}</td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.pcs || '—'}</td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.weight_kg} kg</td>
                 <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                   {showStatusDropdown ? (
                     <select
@@ -185,12 +169,56 @@ export default function ManagerPage() {
                     </span>
                   )}
                 </td>
+                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                    s.fwb_status === 'sent' ? 'bg-green-100 text-green-800' :
+                    s.fwb_status === 'not_sent' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>
+                    {s.fwb_status === 'sent' ? 'Sent' : s.fwb_status === 'not_sent' ? 'Not Sent' : 'N/A'}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-sm font-medium text-orange-600" onClick={(e) => e.stopPropagation()}>
+                  {s.expenses?.length > 0
+                    ? s.expenses.reduce((sum: number, e: any) => sum + e.amount, 0).toLocaleString() + ' UZS'
+                    : '—'}
+                </td>
+                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                  {showStatusDropdown ? (
+                    <select
+                      value={s.assigned_specialist || ''}
+                      onChange={(e) => assignSpecialist(s.id, e.target.value)}
+                      className={`text-sm border rounded-lg px-2 py-1 ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'border-gray-200 text-gray-700'}`}
+                    >
+                      <option value="">Not assigned</option>
+                      {specialists.map((sp) => (
+                        <option key={sp.id} value={sp.id}>{sp.full_name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                      {specialists.find(sp => sp.id === s.assigned_specialist)?.full_name || '—'}
+                    </span>
+                  )}
+                </td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`} onClick={(e) => e.stopPropagation()}>
+                  {s.notes ? s.notes.substring(0, 30) + (s.notes.length > 30 ? '...' : '') : '—'}
+                </td>
+                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => deleteShipment(s.id)}
+                    className="text-red-500 hover:text-red-600 text-sm font-medium"
+                  >
+                    🗑️
+                  </button>
+                </td>
               </tr>
             ))
           )}
         </tbody>
-      </table>
-    </div>
+                </table>
+          </div>
+        </div>
   )
 
   return (

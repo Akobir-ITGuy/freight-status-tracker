@@ -16,6 +16,7 @@ export default function SalesPage() {
     return true
   })
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [specialists, setSpecialists] = useState<any[]>([])
   const [activeSection, setActiveSection] = useState('active')
   const [form, setForm] = useState({
     tracking_number: '',
@@ -33,6 +34,7 @@ export default function SalesPage() {
   useEffect(() => {
     fetchShipments()
     fetchCurrentUser()
+    fetchSpecialists()
   }, [])
 
   const fetchCurrentUser = async () => {
@@ -61,6 +63,14 @@ export default function SalesPage() {
       .order('created_at', { ascending: false })
     setShipments(data || [])
     setLoading(false)
+  }
+
+  const fetchSpecialists = async () => {
+    const { data } = await supabase
+      .from('users')
+      .select('id, full_name')
+      .eq('role', 'ops_specialist')
+    setSpecialists(data || [])
   }
 
   const handleSubmit = async () => {
@@ -151,8 +161,8 @@ export default function SalesPage() {
       <table className="w-full">
         <thead className={`border-b ${darkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
           <tr>
-            {['Tracking No.', 'Client', 'Route', 'Weight', 'Departure', 'FWB', 'Status'].map(h => (
-              <th key={h} className={`text-left px-6 py-3 text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{h}</th>
+            {['AWB', 'DEST', 'STD', 'Flight', 'Pcs', 'GW', 'Status', 'FWB', 'Handler', 'Notes'].map(h => (
+              <th key={h} className={`text-left px-6 py-3 text-sm font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -165,10 +175,13 @@ export default function SalesPage() {
             data.map((s) => (
               <tr key={s.id} className={darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-50'}>
                 <td className={`px-6 py-4 font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.tracking_number}</td>
-                <td className={`px-6 py-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{s.client_name}</td>
-                <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.origin} → {s.destination}</td>
-                <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.weight_kg} kg</td>
-                <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.estimated_departure}</td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.destination}</td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {s.estimated_departure ? new Date(s.estimated_departure).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                </td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.flight_number || '—'}</td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.pcs || '—'}</td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.weight_kg} kg</td>
                 <td className="px-6 py-4">
                   <select
                     value={s.fwb_status || 'na'}
@@ -200,6 +213,12 @@ export default function SalesPage() {
                       {statusLabels[s.status] || s.status}
                     </span>
                   )}
+                </td>
+                <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  {specialists.find(sp => sp.id === s.assigned_specialist)?.full_name || '—'}
+                </td>
+                <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {s.notes ? s.notes.substring(0, 30) + (s.notes.length > 30 ? '...' : '') : '—'}
                 </td>
               </tr>
             ))

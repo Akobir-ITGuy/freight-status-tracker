@@ -15,12 +15,20 @@ export default function ShipmentPage() {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<any>({})
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [expenses, setExpenses] = useState<any[]>([])
+  const [showExpenseForm, setShowExpenseForm] = useState(false)
+  const [expenseForm, setExpenseForm] = useState({
+    category: '',
+    amount: '',
+    description: ''
+  })
 
   useEffect(() => {
     fetchShipment()
     fetchDocuments()
     fetchLogs()
     fetchCurrentUser()
+    fetchExpenses()
   }, [id])
 
   const fetchCurrentUser = async () => {
@@ -62,6 +70,33 @@ export default function ShipmentPage() {
       .eq('shipment_id', id)
       .order('created_at', { ascending: false })
     setLogs(data || [])
+  }
+
+  const fetchExpenses = async () => {
+    const { data } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('shipment_id', id)
+      .order('created_at', { ascending: false })
+    setExpenses(data || [])
+  }
+
+  const addExpense = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from('expenses').insert({
+      shipment_id: id,
+      category: expenseForm.category,
+      amount: parseFloat(expenseForm.amount),
+      currency: 'UZS',
+      description: expenseForm.description,
+      is_shared: false,
+      created_by: user?.id
+    })
+    await addLog('Uploaded', 'Expense', '', `${expenseForm.category} — ${expenseForm.amount} UZS`)
+    setExpenseForm({ category: '', amount: '', description: '' })
+    setShowExpenseForm(false)
+    fetchExpenses()
+    fetchLogs()
   }
 
   const addLog = async (action: string, fieldName: string, oldValue: string, newValue: string) => {
@@ -253,6 +288,105 @@ export default function ShipmentPage() {
               >
                 Cancel
               </button>
+            )}
+          </div>
+
+          {/* Expenses */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Expenses
+                {expenses.length > 0 && (
+                  <span className="ml-2 text-sm font-normal text-gray-500">
+                    Total: {expenses.reduce((sum, e) => sum + e.amount, 0).toLocaleString()} UZS
+                  </span>
+                )}
+              </h2>
+              <button
+                onClick={() => setShowExpenseForm(!showExpenseForm)}
+                className="bg-orange-100 text-orange-700 hover:bg-orange-200 text-sm font-medium px-3 py-1 rounded-lg"
+              >
+                + Add Expense
+              </button>
+            </div>
+
+            {showExpenseForm && (
+              <div className="bg-orange-50 rounded-lg p-4 mb-4">
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Category</label>
+                    <select
+                      value={expenseForm.category}
+                      onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    >
+                      <option value="">Select...</option>
+                      <option value="Customs">Customs</option>
+                      <option value="Storage">Storage</option>
+                      <option value="Handling">Handling</option>
+                      <option value="Transport">Transport</option>
+                      <option value="Insurance">Insurance</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Amount (UZS)</label>
+                    <input
+                      type="number"
+                      value={expenseForm.amount}
+                      onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
+                      placeholder="500000"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+                </div>
+                <div className="mb-3">
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">Description</label>
+                  <input
+                    type="text"
+                    value={expenseForm.description}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
+                    placeholder="Additional details..."
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={addExpense}
+                    className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 rounded-lg text-sm"
+                  >
+                    Save Expense
+                  </button>
+                  <button
+                    onClick={() => setShowExpenseForm(false)}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {expenses.length === 0 ? (
+              <div className="text-center py-6 text-gray-400">
+                <p className="text-2xl mb-1">💰</p>
+                <p className="text-sm">No expenses yet</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {expenses.map((exp) => (
+                  <div key={exp.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{exp.category}</p>
+                      {exp.description && <p className="text-xs text-gray-500">{exp.description}</p>}
+                      {exp.is_shared && <p className="text-xs text-blue-500">Auto-distributed from truck</p>}
+                    </div>
+                    <span className="text-sm font-semibold text-orange-600">
+                      {exp.amount.toLocaleString()} UZS
+                    </span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 

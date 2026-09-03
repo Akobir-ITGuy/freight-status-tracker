@@ -113,6 +113,18 @@ export default function TrucksSection({ darkMode, currentUser }: TrucksSectionPr
     fetchTrucks()
   }
 
+  const deleteTruck = async (truckId: string) => {
+    if (!confirm('Are you sure you want to delete this truck? All assigned AWBs will be unassigned.')) return
+    const assignedShipments = truckShipments[truckId] || []
+    for (const s of assignedShipments) {
+      await supabase.from('shipments').update({ truck_id: null }).eq('id', s.id)
+    }
+    await supabase.from('truck_expenses').delete().eq('truck_id', truckId)
+    await supabase.from('trucks').delete().eq('id', truckId)
+    fetchTrucks()
+    fetchShipments()
+  }
+
   const updateTruckStatus = async (truckId: string, status: string) => {
     await supabase.from('trucks').update({ status }).eq('id', truckId)
     if (status === 'unloaded') await distributeExpenses(truckId)
@@ -187,12 +199,14 @@ export default function TrucksSection({ darkMode, currentUser }: TrucksSectionPr
             📦 Archived ({archivedTrucks.length})
           </button>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors"
-        >
-          + New Truck
-        </button>
+        {(currentUser?.role === 'ops_manager' || currentUser?.role === 'sales') && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors"
+          >
+            + New Truck
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -228,7 +242,7 @@ export default function TrucksSection({ darkMode, currentUser }: TrucksSectionPr
                       Total Weight: {totalWeight.toLocaleString()} kg | AWBs: {assignedShipments.length}
                     </p>
                   </div>
-                  {isManager && activeTab === 'active' && (
+                  {isManager && (
                     <div className="flex gap-2">
                       <select
                         value={truck.status}
@@ -244,6 +258,12 @@ export default function TrucksSection({ darkMode, currentUser }: TrucksSectionPr
                         className="bg-orange-100 text-orange-700 hover:bg-orange-200 text-sm font-medium px-3 py-1 rounded-lg"
                       >
                         + Expense
+                      </button>
+                      <button
+                        onClick={() => deleteTruck(truck.id)}
+                        className="bg-red-100 text-red-600 hover:bg-red-200 text-sm font-medium px-3 py-1 rounded-lg"
+                      >
+                        🗑️ Delete
                       </button>
                     </div>
                   )}
@@ -266,7 +286,7 @@ export default function TrucksSection({ darkMode, currentUser }: TrucksSectionPr
                               {s.client_name} — {s.weight_kg} kg
                             </span>
                           </div>
-                          {activeTab === 'active' && (
+                          {isManager && (
                             <button
                               onClick={() => removeShipment(s.id)}
                               className="text-red-500 hover:text-red-600 text-xs font-medium"
