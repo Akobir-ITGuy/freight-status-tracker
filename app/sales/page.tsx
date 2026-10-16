@@ -28,6 +28,8 @@ export default function SalesPage() {
     volume_m3: '',
     estimated_departure: '',
     estimated_arrival: '',
+    flight_number: '',
+    pcs: '',
     notes: ''
   })
 
@@ -74,6 +76,10 @@ export default function SalesPage() {
   }
 
   const handleSubmit = async () => {
+    if (!form.tracking_number || !form.client_name || !form.origin || !form.destination || !form.cargo_type) {
+      alert('Please fill in all required fields: AWB, Client, Hub, Destination, Commodity')
+      return
+    }
     const { data: { user } } = await supabase.auth.getUser()
     const { data: userData } = await supabase
       .from('users')
@@ -82,14 +88,28 @@ export default function SalesPage() {
       .single()
 
     const { error } = await supabase.from('shipments').insert({
-      ...form,
-      weight_kg: parseFloat(form.weight_kg),
-      volume_m3: parseFloat(form.volume_m3),
+      tracking_number: form.tracking_number,
+      client_name: form.client_name,
+      origin: form.origin,
+      destination: form.destination,
+      cargo_type: form.cargo_type,
+      weight_kg: parseFloat(form.weight_kg) || 0,
+      volume_m3: parseFloat(form.volume_m3) || 0,
+      pcs: form.pcs ? parseInt(form.pcs) : null,
+      estimated_departure: form.estimated_departure || null,
+      estimated_arrival: null,
+      flight_number: form.flight_number || null,
+      notes: form.notes || null,
       status: 'shipment_confirmed',
       fwb_status: 'na',
       created_by: user?.id,
       team: userData?.team
     })
+
+    if (error) {
+      console.error('Error creating shipment:', error)
+      return
+    }
 
     if (!error) {
       setShowForm(false)
@@ -103,6 +123,8 @@ export default function SalesPage() {
         volume_m3: '',
         estimated_departure: '',
         estimated_arrival: '',
+        flight_number: '',
+        pcs: '',
         notes: ''
       })
       fetchShipments()
@@ -168,9 +190,9 @@ export default function SalesPage() {
         </thead>
         <tbody className={`divide-y ${darkMode ? 'divide-gray-600' : 'divide-gray-100'}`}>
           {loading ? (
-            <tr><td colSpan={7} className="text-center py-10 text-gray-400">Loading...</td></tr>
+            <tr><td colSpan={9} className="text-center py-10 text-gray-400">Loading...</td></tr>
           ) : data.length === 0 ? (
-            <tr><td colSpan={7} className="text-center py-10 text-gray-400">No AWBs yet</td></tr>
+            <tr><td colSpan={9} className="text-center py-10 text-gray-400">No AWBs yet</td></tr>
           ) : (
             data.map((s) => (
               <tr key={s.id} className={darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-50'}>
@@ -300,17 +322,52 @@ export default function SalesPage() {
         <div className="flex-1 p-8">
           {activeSection === 'active' && (
             <>
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                {[
-                  { label: 'Total Active', value: activeShipments.length, color: darkMode ? 'text-white' : 'text-gray-900' },
-                  { label: 'In Transit', value: activeShipments.filter(s => ['departed_from_wh', 'under_customs', 'arrived_cn_kz', 'arrived_kz_uz'].includes(s.status)).length, color: 'text-orange-500' },
-                  { label: 'Heading to TAS', value: activeShipments.filter(s => s.status === 'heading_to_tas').length, color: 'text-green-500' },
-                ].map((stat) => (
-                  <div key={stat.label} className={`rounded-xl p-5 shadow-sm ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{stat.label}</p>
-                    <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
+              {/* Stats */}
+              <div className={`rounded-xl p-5 shadow-sm mb-4 ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
+                <div className="flex justify-between items-center mb-3">
+                  <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Current Shipments</p>
+                  <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{activeShipments.length}</p>
+                </div>
+
+                {/* Progress Bar */}
+                {activeShipments.length > 0 && (
+                  <div className="w-full h-3 rounded-full overflow-hidden flex mb-4">
+                    {[
+                      { statuses: ['shipment_confirmed', 'arrived_at_wh', 'departed_from_wh'], color: 'bg-yellow-400' },
+                      { statuses: ['under_customs', 'arrived_cn_kz'], color: 'bg-orange-400' },
+                      { statuses: ['arrived_kz_uz', 'heading_to_tas'], color: 'bg-red-400' },
+                      { statuses: ['at_airport', 'departed', 'arrived_destination'], color: 'bg-green-400' },
+                    ].map((segment, i) => {
+                      const count = activeShipments.filter(s => segment.statuses.includes(s.status)).length
+                      const width = (count / activeShipments.length) * 100
+                      return width > 0 ? (
+                        <div
+                          key={i}
+                          className={`${segment.color} h-full transition-all`}
+                          style={{ width: `${width}%` }}
+                        />
+                      ) : null
+                    })}
                   </div>
-                ))}
+                )}
+
+                {/* Stage counts */}
+                <div className="grid grid-cols-4 gap-3">
+                  {[
+                    { label: 'LTL Consoling', statuses: ['shipment_confirmed', 'arrived_at_wh', 'departed_from_wh'], color: 'text-yellow-500', bg: darkMode ? 'bg-yellow-900/30' : 'bg-yellow-50', border: 'border-yellow-400' },
+                    { label: 'En Route to KZ', statuses: ['under_customs', 'arrived_cn_kz'], color: 'text-orange-500', bg: darkMode ? 'bg-orange-900/30' : 'bg-orange-50', border: 'border-orange-400' },
+                    { label: 'Customs Clearance', statuses: ['arrived_kz_uz', 'heading_to_tas'], color: 'text-red-500', bg: darkMode ? 'bg-red-900/30' : 'bg-red-50', border: 'border-red-400' },
+                    { label: 'En Route to UZ', statuses: ['at_airport', 'departed', 'arrived_destination'], color: 'text-green-500', bg: darkMode ? 'bg-green-900/30' : 'bg-green-50', border: 'border-green-400' },
+                  ].map((stage) => {
+                    const count = activeShipments.filter(s => stage.statuses.includes(s.status)).length
+                    return (
+                      <div key={stage.label} className={`rounded-lg p-3 border-l-4 ${stage.bg} ${stage.border}`}>
+                        <p className={`text-xs font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{stage.label}</p>
+                        <p className={`text-2xl font-bold ${stage.color}`}>{count}</p>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
               <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Active Shipments</h2>
               {renderTable(activeShipments)}
@@ -348,37 +405,118 @@ export default function SalesPage() {
 
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">New AWB</h2>
+          <div className={`rounded-2xl shadow-xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            <h2 className={`text-xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>New AWB</h2>
             <div className="grid grid-cols-2 gap-4">
-              {[
-                { label: 'Tracking No.', key: 'tracking_number', placeholder: 'AWB-12345' },
-                { label: 'Client', key: 'client_name', placeholder: 'Company name' },
-                { label: 'Origin', key: 'origin', placeholder: 'Shanghai' },
-                { label: 'Destination', key: 'destination', placeholder: 'Tashkent' },
-                { label: 'Cargo Type', key: 'cargo_type', placeholder: 'Electronics' },
-                { label: 'Weight (kg)', key: 'weight_kg', placeholder: '500', type: 'number' },
-                { label: 'Volume (m³)', key: 'volume_m3', placeholder: '2.5', type: 'number' },
-                { label: 'Est. Departure', key: 'estimated_departure', type: 'date' },
-                { label: 'Est. Arrival', key: 'estimated_arrival', type: 'date' },
-              ].map(({ label, key, placeholder, type }) => (
-                <div key={key}>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">{label}</label>
+                <div>
+                  <label className={`text-sm font-medium mb-1 block ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>AWB</label>
                   <input
-                    type={type || 'text'}
-                    value={(form as any)[key]}
-                    onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                    placeholder={placeholder}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    type="text"
+                    value={form.tracking_number}
+                    onChange={(e) => setForm({ ...form, tracking_number: e.target.value })}
+                    placeholder="AWB-12345"
+                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900'}`}
                   />
                 </div>
-              ))}
+                <div>
+                  <label className={`text-sm font-medium mb-1 block ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Client</label>
+                  <input
+                    type="text"
+                    value={form.client_name}
+                    onChange={(e) => setForm({ ...form, client_name: e.target.value })}
+                    placeholder="Company name"
+                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900'}`}
+                  />
+                </div>
+                <div>
+                  <label className={`text-sm font-medium mb-1 block ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Hub</label>
+                  <select
+                    value={form.origin}
+                    onChange={(e) => setForm({ ...form, origin: e.target.value })}
+                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'border-gray-300 text-gray-900'}`}
+                  >
+                    <option value="">Select hub...</option>
+                    <option value="XIY">XIY</option>
+                    <option value="PVG">PVG</option>
+                    <option value="SZX">SZX</option>
+                    <option value="Pick Up">Pick Up</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={`text-sm font-medium mb-1 block ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Destination</label>
+                  <input
+                    type="text"
+                    value={form.destination}
+                    onChange={(e) => setForm({ ...form, destination: e.target.value })}
+                    placeholder="Tashkent"
+                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900'}`}
+                  />
+                </div>
+                <div>
+                  <label className={`text-sm font-medium mb-1 block ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Commodity</label>
+                  <input
+                    type="text"
+                    value={form.cargo_type}
+                    onChange={(e) => setForm({ ...form, cargo_type: e.target.value })}
+                    placeholder="Electronics"
+                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900'}`}
+                  />
+                </div>
+                <div>
+                  <label className={`text-sm font-medium mb-1 block ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Pcs</label>
+                  <input
+                    type="number"
+                    value={form.pcs}
+                    onChange={(e) => setForm({ ...form, pcs: e.target.value })}
+                    placeholder="10"
+                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900'}`}
+                  />
+                </div>
+                <div>
+                  <label className={`text-sm font-medium mb-1 block ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>GW (kg)</label>
+                  <input
+                    type="number"
+                    value={form.weight_kg}
+                    onChange={(e) => setForm({ ...form, weight_kg: e.target.value })}
+                    placeholder="500"
+                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900'}`}
+                  />
+                </div>
+                <div>
+                  <label className={`text-sm font-medium mb-1 block ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Volume (m³)</label>
+                  <input
+                    type="number"
+                    value={form.volume_m3}
+                    onChange={(e) => setForm({ ...form, volume_m3: e.target.value })}
+                    placeholder="2.5"
+                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900'}`}
+                  />
+                </div>
+                <div>
+                  <label className={`text-sm font-medium mb-1 block ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Flight Date</label>
+                  <input
+                    type="date"
+                    value={form.estimated_departure}
+                    onChange={(e) => setForm({ ...form, estimated_departure: e.target.value })}
+                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'border-gray-300 text-gray-900'}`}
+                  />
+                </div>
+                <div>
+                  <label className={`text-sm font-medium mb-1 block ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Flight No.</label>
+                  <input
+                    type="text"
+                    value={form.flight_number}
+                    onChange={(e) => setForm({ ...form, flight_number: e.target.value })}
+                    placeholder="HY123"
+                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900'}`}
+                  />
+                </div>
               <div className="col-span-2">
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Notes</label>
+                <label className={`text-sm font-medium mb-1 block ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Notes</label>
                 <textarea
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900'}`}
                   rows={3}
                   placeholder="Additional information..."
                 />
@@ -388,7 +526,7 @@ export default function SalesPage() {
               <button onClick={handleSubmit} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg">
                 Create AWB
               </button>
-              <button onClick={() => setShowForm(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-lg">
+              <button onClick={() => setShowForm(false)} className={`flex-1 font-semibold py-3 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
                 Cancel
               </button>
             </div>

@@ -138,9 +138,9 @@ export default function ManagerPage() {
         </thead>
         <tbody className={`divide-y ${darkMode ? 'divide-gray-600' : 'divide-gray-100'}`}>
           {loading ? (
-            <tr><td colSpan={9} className="text-center py-10 text-gray-400">Loading...</td></tr>
+            <tr><td colSpan={12} className="text-center py-10 text-gray-400">Loading...</td></tr>
           ) : data.length === 0 ? (
-            <tr><td colSpan={9} className="text-center py-10 text-gray-400">No AWBs yet</td></tr>
+            <tr><td colSpan={12} className="text-center py-10 text-gray-400">No AWBs yet</td></tr>
           ) : (
             data.map((s) => (
               <tr key={s.id} onClick={() => router.push(`/shipment/${s.id}`)} className={`cursor-pointer ${darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-50'}`}>
@@ -287,17 +287,52 @@ export default function ManagerPage() {
         <div className="flex-1 p-8">
           {activeSection === 'active' && (
             <>
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                {[
-                  { label: 'Total Active', value: activeShipments.length, color: darkMode ? 'text-white' : 'text-gray-900' },
-                  { label: 'In Progress', value: activeShipments.filter(s => ['at_airport', 'departed'].includes(s.status)).length, color: 'text-orange-500' },
-                  { label: 'Pending', value: activeShipments.filter(s => s.status === 'heading_to_tas').length, color: 'text-yellow-500' },
-                ].map((stat) => (
-                  <div key={stat.label} className={`rounded-xl p-5 shadow-sm ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{stat.label}</p>
-                    <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
+              {/* Stats */}
+              <div className={`rounded-xl p-5 shadow-sm mb-4 ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
+                <div className="flex justify-between items-center mb-3">
+                  <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Current Shipments</p>
+                  <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{activeShipments.length}</p>
+                </div>
+
+                {/* Progress Bar */}
+                {activeShipments.length > 0 && (
+                  <div className="w-full h-3 rounded-full overflow-hidden flex mb-4">
+                    {[
+                      { statuses: ['shipment_confirmed', 'arrived_at_wh', 'departed_from_wh'], color: 'bg-yellow-400' },
+                      { statuses: ['under_customs', 'arrived_cn_kz'], color: 'bg-orange-400' },
+                      { statuses: ['arrived_kz_uz', 'heading_to_tas'], color: 'bg-red-400' },
+                      { statuses: ['at_airport', 'departed', 'arrived_destination'], color: 'bg-green-400' },
+                    ].map((segment, i) => {
+                      const count = activeShipments.filter(s => segment.statuses.includes(s.status)).length
+                      const width = activeShipments.length > 0 ? (count / activeShipments.length) * 100 : 0
+                      return width > 0 ? (
+                        <div
+                          key={i}
+                          className={`${segment.color} h-full transition-all`}
+                          style={{ width: `${width}%` }}
+                        />
+                      ) : null
+                    })}
                   </div>
-                ))}
+                )}
+
+                {/* Stage counts */}
+                <div className="grid grid-cols-4 gap-3">
+                  {[
+                    { label: 'LTL Consoling', statuses: ['shipment_confirmed', 'arrived_at_wh', 'departed_from_wh'], color: 'text-yellow-500', bg: darkMode ? 'bg-yellow-900/30' : 'bg-yellow-50', border: 'border-yellow-400' },
+                    { label: 'En Route to KZ', statuses: ['under_customs', 'arrived_cn_kz'], color: 'text-orange-500', bg: darkMode ? 'bg-orange-900/30' : 'bg-orange-50', border: 'border-orange-400' },
+                    { label: 'Customs Clearance', statuses: ['arrived_kz_uz', 'heading_to_tas'], color: 'text-red-500', bg: darkMode ? 'bg-red-900/30' : 'bg-red-50', border: 'border-red-400' },
+                    { label: 'En Route to UZ', statuses: ['at_airport', 'departed', 'arrived_destination'], color: 'text-green-500', bg: darkMode ? 'bg-green-900/30' : 'bg-green-50', border: 'border-green-400' },
+                  ].map((stage) => {
+                    const count = activeShipments.filter(s => stage.statuses.includes(s.status)).length
+                    return (
+                      <div key={stage.label} className={`rounded-lg p-3 border-l-4 ${stage.bg} ${stage.border}`}>
+                        <p className={`text-xs font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{stage.label}</p>
+                        <p className={`text-2xl font-bold ${stage.color}`}>{count}</p>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
               <div className="flex justify-between items-center mb-4">
                 <h2 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Active Shipments</h2>

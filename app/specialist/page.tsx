@@ -104,9 +104,9 @@ export default function SpecialistPage() {
         </thead>
         <tbody className={`divide-y ${darkMode ? 'divide-gray-600' : 'divide-gray-100'}`}>
           {loading ? (
-            <tr><td colSpan={6} className="text-center py-10 text-gray-400">Loading...</td></tr>
+            <tr><td colSpan={8} className="text-center py-10 text-gray-400">Loading...</td></tr>
           ) : data.length === 0 ? (
-            <tr><td colSpan={6} className="text-center py-10 text-gray-400">No AWBs assigned yet</td></tr>
+            <tr><td colSpan={8} className="text-center py-10 text-gray-400">No AWBs assigned yet</td></tr>
           ) : (
             data.map((s) => (
               <tr key={s.id} onClick={() => router.push(`/shipment/${s.id}`)} className={`cursor-pointer ${darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-50'}`}>
