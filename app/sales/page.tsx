@@ -18,6 +18,7 @@ export default function SalesPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [specialists, setSpecialists] = useState<any[]>([])
   const [activeSection, setActiveSection] = useState('active')
+  const [stageFilter, setStageFilter] = useState<string | null>(null)
   const [form, setForm] = useState({
     tracking_number: '',
     client_name: '',
@@ -170,6 +171,20 @@ export default function SalesPage() {
   const activeShipments = shipments.filter(s => s.status !== 'completed')
   const completedShipments = shipments.filter(s => s.status === 'completed')
 
+  const filterShipments = (data: any[]) => {
+    let filtered = data
+    if (stageFilter) {
+      const stageStatuses: any = {
+        'ltl': ['shipment_confirmed', 'arrived_at_wh'],
+        'enroute_kz': ['departed_from_wh'],
+        'customs': ['arrived_cn_kz', 'under_customs'],
+        'enroute_uz': ['arrived_kz_uz', 'heading_to_tas'],
+      }
+      filtered = filtered.filter(s => stageStatuses[stageFilter]?.includes(s.status))
+    }
+    return filtered
+  }
+
   const menuItems = [
     { id: 'active', label: 'Active Shipments', icon: '📦' },
     { id: 'completed', label: 'Completed Shipments', icon: '✅' },
@@ -205,21 +220,6 @@ export default function SalesPage() {
                 <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.pcs || '—'}</td>
                 <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.weight_kg} kg</td>
                 <td className="px-6 py-4">
-                  <select
-                    value={s.fwb_status || 'na'}
-                    onChange={(e) => updateFwb(s.id, e.target.value)}
-                    className={`text-sm border rounded-lg px-2 py-1 font-medium ${
-                      s.fwb_status === 'sent' ? 'bg-green-100 text-green-800 border-green-200' :
-                      s.fwb_status === 'not_sent' ? 'bg-red-100 text-red-800 border-red-200' :
-                      'bg-gray-100 text-gray-600 border-gray-200'
-                    }`}
-                  >
-                    <option value="na">N/A</option>
-                    <option value="not_sent">Not Sent</option>
-                    <option value="sent">Sent</option>
-                  </select>
-                </td>
-                <td className="px-6 py-4">
                   {activeSection === 'active' ? (
                     <select
                       value={s.status}
@@ -235,6 +235,21 @@ export default function SalesPage() {
                       {statusLabels[s.status] || s.status}
                     </span>
                   )}
+                </td>
+                <td className="px-6 py-4">
+                  <select
+                    value={s.fwb_status || 'na'}
+                    onChange={(e) => updateFwb(s.id, e.target.value)}
+                    className={`text-sm border rounded-lg px-2 py-1 font-medium ${
+                      s.fwb_status === 'sent' ? 'bg-green-100 text-green-800 border-green-200' :
+                      s.fwb_status === 'not_sent' ? 'bg-red-100 text-red-800 border-red-200' :
+                      'bg-gray-100 text-gray-600 border-gray-200'
+                    }`}
+                  >
+                    <option value="na">N/A</option>
+                    <option value="not_sent">Not Sent</option>
+                    <option value="sent">Sent</option>
+                  </select>
                 </td>
                 <td className={`px-6 py-4 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                   {specialists.find(sp => sp.id === s.assigned_specialist)?.full_name || '—'}
@@ -333,10 +348,10 @@ export default function SalesPage() {
                 {activeShipments.length > 0 && (
                   <div className="w-full h-3 rounded-full overflow-hidden flex mb-4">
                     {[
-                      { statuses: ['shipment_confirmed', 'arrived_at_wh', 'departed_from_wh'], color: 'bg-yellow-400' },
-                      { statuses: ['under_customs', 'arrived_cn_kz'], color: 'bg-orange-400' },
-                      { statuses: ['arrived_kz_uz', 'heading_to_tas'], color: 'bg-red-400' },
-                      { statuses: ['at_airport', 'departed', 'arrived_destination'], color: 'bg-green-400' },
+                      { statuses: ['shipment_confirmed', 'arrived_at_wh'], color: 'bg-yellow-400' },
+                      { statuses: ['departed_from_wh'], color: 'bg-orange-400' },
+                      { statuses: ['arrived_cn_kz', 'under_customs'], color: 'bg-red-400' },
+                      { statuses: ['arrived_kz_uz', 'heading_to_tas'], color: 'bg-green-400' },
                     ].map((segment, i) => {
                       const count = activeShipments.filter(s => segment.statuses.includes(s.status)).length
                       const width = (count / activeShipments.length) * 100
@@ -354,23 +369,29 @@ export default function SalesPage() {
                 {/* Stage counts */}
                 <div className="grid grid-cols-4 gap-3">
                   {[
-                    { label: 'LTL Consoling', statuses: ['shipment_confirmed', 'arrived_at_wh', 'departed_from_wh'], color: 'text-yellow-500', bg: darkMode ? 'bg-yellow-900/30' : 'bg-yellow-50', border: 'border-yellow-400' },
-                    { label: 'En Route to KZ', statuses: ['under_customs', 'arrived_cn_kz'], color: 'text-orange-500', bg: darkMode ? 'bg-orange-900/30' : 'bg-orange-50', border: 'border-orange-400' },
-                    { label: 'Customs Clearance', statuses: ['arrived_kz_uz', 'heading_to_tas'], color: 'text-red-500', bg: darkMode ? 'bg-red-900/30' : 'bg-red-50', border: 'border-red-400' },
-                    { label: 'En Route to UZ', statuses: ['at_airport', 'departed', 'arrived_destination'], color: 'text-green-500', bg: darkMode ? 'bg-green-900/30' : 'bg-green-50', border: 'border-green-400' },
+                    { key: 'ltl', label: 'LTL Consoling', statuses: ['shipment_confirmed', 'arrived_at_wh'], color: 'text-yellow-500', bg: darkMode ? 'bg-yellow-900/30' : 'bg-yellow-50', border: 'border-yellow-400' },
+                    { key: 'enroute_kz', label: 'En Route to KZ', statuses: ['departed_from_wh'], color: 'text-orange-500', bg: darkMode ? 'bg-orange-900/30' : 'bg-orange-50', border: 'border-orange-400' },
+                    { key: 'customs', label: 'Customs Clearance', statuses: ['arrived_cn_kz', 'under_customs'], color: 'text-red-500', bg: darkMode ? 'bg-red-900/30' : 'bg-red-50', border: 'border-red-400' },
+                    { key: 'enroute_uz', label: 'En Route to UZ', statuses: ['arrived_kz_uz', 'heading_to_tas'], color: 'text-green-500', bg: darkMode ? 'bg-green-900/30' : 'bg-green-50', border: 'border-green-400' },
                   ].map((stage) => {
                     const count = activeShipments.filter(s => stage.statuses.includes(s.status)).length
+                    const isActive = stageFilter === stage.key
                     return (
-                      <div key={stage.label} className={`rounded-lg p-3 border-l-4 ${stage.bg} ${stage.border}`}>
+                      <div
+                        key={stage.label}
+                        onClick={() => setStageFilter(isActive ? null : stage.key)}
+                        className={`rounded-lg p-3 border-l-4 cursor-pointer transition-all ${stage.bg} ${stage.border} ${isActive ? 'ring-2 ring-blue-500' : 'hover:opacity-80'}`}
+                      >
                         <p className={`text-xs font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{stage.label}</p>
                         <p className={`text-2xl font-bold ${stage.color}`}>{count}</p>
+                        {isActive && <p className="text-xs text-blue-500 mt-1">Click to clear</p>}
                       </div>
                     )
                   })}
                 </div>
               </div>
               <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Active Shipments</h2>
-              {renderTable(activeShipments)}
+              {renderTable(filterShipments(activeShipments))}
             </>
           )}
 
